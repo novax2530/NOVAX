@@ -12,8 +12,8 @@ import { showAd } from "../lib/adSdk";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const SESSION_MAX_AGE_MS = 14 * 60 * 1000; // server expires sessions after 15 minutes
-const AUTO_TRIES = 4; // automatic claim attempts right after the ad closes
-const AUTO_GAP_MS = 2500;
+const AUTO_TRIES = 5; // automatic claim attempts right after the ad closes
+const AUTO_GAP_MS = 3000; // 4 gaps = a 12 second verification countdown
 
 const storeKey = (platformId) => `nova_ad_pending_${platformId}`;
 
@@ -55,6 +55,9 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
   const [msg, setMsg] = useState("");
   const [isError, setIsError] = useState(false);
   const [pending, setPending] = useState(() => loadPending(platform.id));
+  const [countdown, setCountdown] = useState(0); // seconds left of the "verifying" wait
+  const tickRef = useRef(null);
+  useEffect(() => () => clearInterval(tickRef.current), []);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
 
@@ -127,7 +130,12 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       const wait = minSeconds * 1000 - (Date.now() - t0) + 300;
       if (wait > 0) await sleep(wait);
 
-      // Auto-claim, giving the ad network a few seconds to confirm the view.
+      // Auto-claim, giving the ad network a few seconds to confirm the view (with a visible countdown).
+      const endAt = Date.now() + (AUTO_TRIES - 1) * AUTO_GAP_MS;
+      const update = () => setCountdown(Math.max(0, Math.ceil((endAt - Date.now()) / 1000)));
+      update();
+      clearInterval(tickRef.current);
+      tickRef.current = setInterval(update, 500);
       for (let i = 0; i < AUTO_TRIES; i++) {
         const finished = await tryClaim(sessionId, { quiet: i < AUTO_TRIES - 1 });
         if (finished) return;
@@ -137,6 +145,8 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       setIsError(true);
       setMsg(e.message || "Something went wrong");
     } finally {
+      clearInterval(tickRef.current);
+      setCountdown(0);
       setBusy(false);
     }
   }
@@ -159,7 +169,9 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       <div className="info">
         <p className="title">{platform.label}</p>
         <p className="reward">
-          {msg ? (
+          {countdown > 0 ? (
+            `Verifying your ad view… ${countdown}s`
+          ) : msg ? (
             <span style={isError ? { color: "var(--danger, #ff6b6b)" } : undefined}>{msg}</span>
           ) : pending ? (
             `Ad watched — tap Claim to get +${platform.reward} ${coinName}`
