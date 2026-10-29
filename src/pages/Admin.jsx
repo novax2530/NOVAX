@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { callApi } from "../lib/api";
+import AdsManager from "./AdsManager";
 
-const SUBTABS = ["Overview", "Tasks", "Super Tasks", "Submissions", "Withdrawals", "Admins", "Settings"];
+const SUBTABS = ["Overview", "Tasks", "Super Tasks", "Ads", "Submissions", "Withdrawals", "Admins", "Settings"];
 
 export default function Admin({ settings, onSettingsChange }) {
   const [sub, setSub] = useState("Overview");
@@ -24,6 +25,7 @@ export default function Admin({ settings, onSettingsChange }) {
       {sub === "Overview" && <Overview />}
       {sub === "Tasks" && <TaskManager />}
       {sub === "Super Tasks" && <SuperTaskManager />}
+      {sub === "Ads" && <AdsManager coinName={settings.coin_name || "coins"} />}
       {sub === "Submissions" && <SubmissionsManager />}
       {sub === "Withdrawals" && <WithdrawalManager coinName={settings.coin_name} />}
       {sub === "Admins" && <AdminsManager />}
@@ -306,34 +308,46 @@ function SubmissionsManager() {
   return (
     <div>
       <p className="hint" style={{ marginBottom: 12 }}>
-        The screenshot itself only lives in your Telegram chat with the bot — check it there
-        before approving. This just lets you record the decision from here instead.
+        Check the screenshot with "View proof" (or in your Telegram chat with the bot), then approve
+        or reject here.
       </p>
       {submissions.length === 0 && <p className="empty-state">No submissions yet.</p>}
-      {submissions.map((s) => (
-        <div className="task" key={s.id} style={{ flexDirection: "column", alignItems: "stretch" }}>
-          <div className="info">
-            <p className="title">{s.super_tasks?.title}</p>
-            <p className="reward">
-              +{s.super_tasks?.reward} coins · from @{s.profiles?.username || s.profiles?.first_name || s.profiles?.telegram_id}
-            </p>
-            <p className="hint">{new Date(s.submitted_at).toLocaleString()}</p>
+      {submissions.map((s) => {
+        const task = s.super_task || s.super_tasks;
+        const user = s.profile || s.profiles;
+        const when = s.created_at || s.submitted_at;
+        return (
+          <div className="task" key={s.id} style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="info">
+              <p className="title">{task?.title}</p>
+              <p className="reward">
+                +{task?.reward} coins · from @{user?.username || user?.first_name || user?.telegram_id}
+              </p>
+              <p className="hint">{when ? new Date(when).toLocaleString() : ""}</p>
+              {s.image && (
+                <p className="hint">
+                  <a href={s.image} target="_blank" rel="noreferrer">
+                    View proof
+                  </a>
+                </p>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <span className={`wd-status ${s.status}`}>{s.status}</span>
+              {s.status === "pending" && (
+                <>
+                  <button className="btn btn-done" disabled={busyId === s.id} onClick={() => process(s, "approved")}>
+                    Approve
+                  </button>
+                  <button className="btn btn-ghost" disabled={busyId === s.id} onClick={() => process(s, "rejected")}>
+                    Reject
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <span className={`wd-status ${s.status}`}>{s.status}</span>
-            {s.status === "pending" && (
-              <>
-                <button className="btn btn-done" disabled={busyId === s.id} onClick={() => process(s, "approved")}>
-                  Approve
-                </button>
-                <button className="btn btn-ghost" disabled={busyId === s.id} onClick={() => process(s, "rejected")}>
-                  Reject
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -428,37 +442,38 @@ function WithdrawalManager({ coinName }) {
   return (
     <div>
       {withdrawals.length === 0 && <p className="empty-state">No withdrawal requests.</p>}
-      {withdrawals.map((w) => (
-        <div className="task" key={w.id} style={{ flexDirection: "column", alignItems: "stretch" }}>
-          <div className="info">
-            <p className="title">
-              @{w.profiles?.username || w.profiles?.first_name || w.profiles?.telegram_id}
-            </p>
-            <p className="reward">
-              {w.amount} {coinName} → {w.wallet_address}
-            </p>
-            <p className="hint">{new Date(w.requested_at).toLocaleString()}</p>
-          </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <span className={`wd-status ${w.status}`}>{w.status}</span>
-            {w.status === "pending" && (
-              <>
-                <button className="btn btn-done" onClick={() => process(w, "approved")}>
-                  Approve
+      {withdrawals.map((w) => {
+        const user = w.profile || w.profiles;
+        return (
+          <div className="task" key={w.id} style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="info">
+              <p className="title">@{user?.username || user?.first_name || user?.telegram_id}</p>
+              <p className="reward">
+                {w.amount} {coinName} → {w.wallet_address}
+              </p>
+              <p className="hint">{new Date(w.requested_at).toLocaleString()}</p>
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <span className={`wd-status ${w.status}`}>{w.status}</span>
+              {w.status === "pending" && (
+                <>
+                  <button className="btn btn-done" onClick={() => process(w, "approved")}>
+                    Approve
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => process(w, "rejected")}>
+                    Reject
+                  </button>
+                </>
+              )}
+              {w.status === "approved" && (
+                <button className="btn btn-primary" onClick={() => process(w, "paid")}>
+                  Mark paid
                 </button>
-                <button className="btn btn-ghost" onClick={() => process(w, "rejected")}>
-                  Reject
-                </button>
-              </>
-            )}
-            {w.status === "approved" && (
-              <button className="btn btn-primary" onClick={() => process(w, "paid")}>
-                Mark paid
-              </button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -472,10 +487,6 @@ function SettingsPanel({ settings, onSettingsChange }) {
     withdrawal_window_start_hour: settings.withdrawal_window_start_hour ?? 8,
     withdrawal_window_end_hour: settings.withdrawal_window_end_hour ?? 20,
     withdrawal_timezone_offset_hours: settings.withdrawal_timezone_offset_hours ?? 0,
-    adsgram_block_id: settings.adsgram_block_id || "",
-    adsgram_task_block_id: settings.adsgram_task_block_id || "",
-    ad_reward_coins: settings.ad_reward_coins ?? 10,
-    ad_daily_limit: settings.ad_daily_limit ?? 20,
   });
   const [channels, setChannels] = useState(settings.required_channels || []);
   const [saved, setSaved] = useState(false);
@@ -494,10 +505,6 @@ function SettingsPanel({ settings, onSettingsChange }) {
       saveField("withdrawal_window_start_hour", Number(form.withdrawal_window_start_hour)),
       saveField("withdrawal_window_end_hour", Number(form.withdrawal_window_end_hour)),
       saveField("withdrawal_timezone_offset_hours", Number(form.withdrawal_timezone_offset_hours)),
-      saveField("adsgram_block_id", form.adsgram_block_id),
-      saveField("adsgram_task_block_id", form.adsgram_task_block_id),
-      saveField("ad_reward_coins", Number(form.ad_reward_coins)),
-      saveField("ad_daily_limit", Number(form.ad_daily_limit)),
     ]);
     setSaved(true);
     onSettingsChange({ ...settings, ...form });
@@ -567,22 +574,9 @@ function SettingsPanel({ settings, onSettingsChange }) {
           <input type="number" value={form.withdrawal_timezone_offset_hours} onChange={(e) => setForm({ ...form, withdrawal_timezone_offset_hours: e.target.value })} />
         </div>
 
-        <div className="field">
-          <label>Adsgram block ID (Watch Ad button)</label>
-          <input value={form.adsgram_block_id} onChange={(e) => setForm({ ...form, adsgram_block_id: e.target.value })} placeholder="int-xxxxx" />
-        </div>
-        <div className="field">
-          <label>Adsgram task block ID (Sponsored Task button, optional)</label>
-          <input value={form.adsgram_task_block_id} onChange={(e) => setForm({ ...form, adsgram_task_block_id: e.target.value })} placeholder="task-xxxxx" />
-        </div>
-        <div className="field">
-          <label>Reward per ad view (coins)</label>
-          <input type="number" value={form.ad_reward_coins} onChange={(e) => setForm({ ...form, ad_reward_coins: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>Max ad views per user per day (0 = unlimited)</label>
-          <input type="number" value={form.ad_daily_limit} onChange={(e) => setForm({ ...form, ad_daily_limit: e.target.value })} />
-        </div>
+        <p className="hint" style={{ marginBottom: 14 }}>
+          Ad platforms (Adsgram, Monetag, others) now live in the <b>Ads</b> tab.
+        </p>
 
         <button className="btn btn-primary" style={{ width: "100%" }}>
           Save settings

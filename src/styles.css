@@ -964,3 +964,21 @@ textarea {
     opacity: 0.4;
   }
 }
+
+.field select,
+.field textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  padding: 11px 12px;
+  color: var(--text);
+  font: inherit;
+}
+.field textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+.field select:disabled {
+  opacity: 0.6;
+}
