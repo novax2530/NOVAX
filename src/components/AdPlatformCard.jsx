@@ -61,7 +61,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
   useEffect(() => () => clearInterval(tickRef.current), []);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
-
+  
   // If the stored session goes stale while the app is open, fall back to "Watch".
   useEffect(() => {
     if (!pending) return;
@@ -72,16 +72,16 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
     }, Math.max(left, 0));
     return () => clearTimeout(t);
   }, [pending, platform.id]);
-
+  
   const limit = platform.dailyLimit;
   const left = limit > 0 ? Math.max(limit - platform.viewsToday, 0) : null;
   const capped = left === 0 && !pending;
-
+  
   function clearPending() {
     setPending(null);
     savePending(platform.id, null);
   }
-
+  
   // One claim attempt. Returns true when the reward was paid or the session is finished for good.
   async function tryClaim(sessionId, { quiet = false } = {}) {
     try {
@@ -107,7 +107,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       return true;
     }
   }
-
+  
   async function watch() {
     setBusy(true);
     setMsg("");
@@ -119,10 +119,11 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       // Remember the session right away: from here on the button is "Claim", never "Watch".
       setPending(started);
       savePending(platform.id, started);
-
+      
       const t0 = Date.now();
       try {
-        await showAd(platform);
+        // Pass the session id so Monetag can send it back in its postback (ymid).
+        await showAd(platform, started.sessionId);
       } catch (e) {
         // The ad never completed (no ad, closed early…): nothing to claim.
         clearPending();
@@ -130,7 +131,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       }
       const wait = minSeconds * 1000 - (Date.now() - t0) + 300;
       if (wait > 0) await sleep(wait);
-
+      
       // Auto-claim, giving the ad network a few seconds to confirm the view (with a visible countdown).
       const endAt = Date.now() + (AUTO_TRIES - 1) * AUTO_GAP_MS;
       const update = () => setCountdown(Math.max(0, Math.ceil((endAt - Date.now()) / 1000)));
@@ -152,7 +153,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       setBusy(false);
     }
   }
-
+  
   // Drop the open ad session so the button goes back to "Watch" and the ad can be retried.
   function cancel() {
     const p = pendingRef.current;
@@ -164,7 +165,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
     setIsError(false);
     setBusy(false);
   }
-
+  
   async function claim() {
     const p = pendingRef.current;
     if (!p) return;
@@ -177,7 +178,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       setBusy(false);
     }
   }
-
+  
   return (
     <div className="task">
       <div className="info">

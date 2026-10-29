@@ -43,9 +43,11 @@ const NOT_DONE = "Watch the full ad to earn the reward";
 const NO_AD = "No ad available right now";
 
 // Shows one ad for the given platform row (from the `ad_platforms` action).
+// sessionId = the server ad session (from ad_start). Monetag needs it as `ymid`
+// so its postback can tell the server which session was really viewed.
 // Resolves when the ad was shown/completed, throws an Error with a user-friendly message otherwise.
 // The reward itself is always decided and paid by the server (ad_start -> ad_complete).
-export async function showAd(platform) {
+export async function showAd(platform, sessionId) {
   const c = platform.config || {};
   try {
     if (platform.provider === "adsgram") {
@@ -66,7 +68,8 @@ export async function showAd(platform) {
       await loadScript(c.script_url, { "data-zone": c.zone_id, "data-sdk": fnName });
       const fn = getFn(fnName);
       if (!fn) throw new Error(NO_AD);
-      await fn();
+      // ymid = our session id. Monetag echoes it back in the server postback.
+      await fn(sessionId ? { ymid: sessionId } : undefined);
       return;
     }
     
