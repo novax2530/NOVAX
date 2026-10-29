@@ -57,6 +57,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
   const [pending, setPending] = useState(() => loadPending(platform.id));
   const [countdown, setCountdown] = useState(0); // seconds left of the "verifying" wait
   const tickRef = useRef(null);
+  const cancelledRef = useRef(null); // sessionId the user cancelled
   useEffect(() => () => clearInterval(tickRef.current), []);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
@@ -137,6 +138,7 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       clearInterval(tickRef.current);
       tickRef.current = setInterval(update, 500);
       for (let i = 0; i < AUTO_TRIES; i++) {
+        if (cancelledRef.current === sessionId) return; // user tapped Cancel
         const finished = await tryClaim(sessionId, { quiet: i < AUTO_TRIES - 1 });
         if (finished) return;
         if (i < AUTO_TRIES - 1) await sleep(AUTO_GAP_MS);
@@ -149,6 +151,18 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
       setCountdown(0);
       setBusy(false);
     }
+  }
+
+  // Drop the open ad session so the button goes back to "Watch" and the ad can be retried.
+  function cancel() {
+    const p = pendingRef.current;
+    if (p) cancelledRef.current = p.sessionId;
+    clearInterval(tickRef.current);
+    setCountdown(0);
+    clearPending();
+    setMsg("");
+    setIsError(false);
+    setBusy(false);
   }
 
   async function claim() {
@@ -182,13 +196,20 @@ export default function AdPlatformCard({ platform, coinName, onBalanceChange, on
           )}
         </p>
       </div>
-      <button
-        className="btn btn-primary"
-        onClick={pending ? claim : watch}
-        disabled={busy || capped}
-      >
-        {busy ? "…" : pending ? "Claim" : "Watch"}
-      </button>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {pending && (
+          <button className="btn" onClick={cancel} style={{ opacity: 0.85 }}>
+            Cancel
+          </button>
+        )}
+        <button
+          className="btn btn-primary"
+          onClick={pending ? claim : watch}
+          disabled={busy || capped}
+        >
+          {busy ? "…" : pending ? "Claim" : "Watch"}
+        </button>
+      </div>
     </div>
   );
 }
