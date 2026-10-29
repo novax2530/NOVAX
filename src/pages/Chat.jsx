@@ -13,25 +13,27 @@ const SUGGESTIONS = [
 let tempCounter = 0;
 const tempId = () => `tmp-${Date.now()}-${tempCounter++}`;
 
-export default function Chat() {
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
+// initialMessages: history preloaded by App during the splash (null = not preloaded, load it here).
+// onMessagesChange: lets App keep the latest messages so re-opening the tab is instant.
+export default function Chat({ initialMessages = null, onMessagesChange }) {
+  const [messages, setMessages] = useState(initialMessages ?? []);
+  const [loading, setLoading] = useState(initialMessages == null);
   const [loadError, setLoadError] = useState("");
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
   const [showJump, setShowJump] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-
+  
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const atBottomRef = useRef(true);
-
+  
   const scrollToBottom = useCallback((smooth = true) => {
     const el = listRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, []);
-
+  
   const loadHistory = useCallback(async () => {
     setLoading(true);
     setLoadError("");
@@ -44,23 +46,28 @@ export default function Chat() {
       setLoading(false);
     }
   }, []);
-
+  
   useEffect(() => {
-    loadHistory();
+    if (initialMessages == null) loadHistory();
   }, [loadHistory]);
-
+  
+  // Keep App's copy up to date (only real messages, and only after the first load).
+  useEffect(() => {
+    if (!loading) onMessagesChange?.(messages.filter((m) => !m.status));
+  }, [messages, loading]);
+  
   // First paint after history loads: jump straight to the newest message.
   useLayoutEffect(() => {
     if (!loading) scrollToBottom(false);
   }, [loading, scrollToBottom]);
-
+  
   // New messages: follow along only if the user hasn't scrolled up.
   useEffect(() => {
     if (loading) return;
     if (atBottomRef.current) scrollToBottom(true);
     else setShowJump(true);
   }, [messages, sending, loading, scrollToBottom]);
-
+  
   function onScroll() {
     const el = listRef.current;
     if (!el) return;
@@ -68,7 +75,7 @@ export default function Chat() {
     atBottomRef.current = near;
     if (near) setShowJump(false);
   }
-
+  
   // Auto-grow the textarea up to ~4 lines.
   useLayoutEffect(() => {
     const el = inputRef.current;
@@ -76,7 +83,7 @@ export default function Chat() {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   }, [text]);
-
+  
   async function deliver(content, existingTempId) {
     const id = existingTempId || tempId();
     const optimistic = {
@@ -89,11 +96,11 @@ export default function Chat() {
     atBottomRef.current = true;
     setSending(true);
     setMessages((m) =>
-      existingTempId
-        ? m.map((x) => (x.id === id ? optimistic : x))
-        : [...m, optimistic]
+      existingTempId ?
+      m.map((x) => (x.id === id ? optimistic : x)) :
+      [...m, optimistic]
     );
-
+    
     try {
       const data = await callApi("chat_send", { message: content });
       setMessages((m) => [
@@ -103,11 +110,11 @@ export default function Chat() {
       ]);
     } catch (e) {
       const friendly =
-        e.status === 429
-          ? "Slow down a little, then try again."
-          : e.code === "NETWORK"
-          ? "You seem to be offline."
-          : e.message || "Couldn't send.";
+        e.status === 429 ?
+        "Slow down a little, then try again." :
+        e.code === "NETWORK" ?
+        "You seem to be offline." :
+        e.message || "Couldn't send.";
       setMessages((m) =>
         m.map((x) => (x.id === id ? { ...x, status: "failed", error: friendly } : x))
       );
@@ -115,14 +122,14 @@ export default function Chat() {
       setSending(false);
     }
   }
-
+  
   function send(content) {
     const clean = content.trim();
     if (!clean || sending || clean.length > MAX_LEN) return;
     setText("");
     deliver(clean);
   }
-
+  
   function onKeyDown(e) {
     // Enter sends on desktop; on touch keyboards Enter inserts a newline.
     const isTouch = window.matchMedia?.("(pointer: coarse)").matches;
@@ -131,7 +138,7 @@ export default function Chat() {
       send(text);
     }
   }
-
+  
   async function clearChat() {
     setConfirmClear(false);
     try {
@@ -141,11 +148,11 @@ export default function Chat() {
       setLoadError(e.message);
     }
   }
-
+  
   const empty = !loading && !loadError && messages.length === 0;
   const tooLong = text.length > MAX_LEN;
   const nearLimit = text.length > MAX_LEN - 100;
-
+  
   return (
     <div className="chat">
       <div className="chat-head">

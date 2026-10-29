@@ -14,10 +14,23 @@ import Admin from "./pages/Admin";
 import Chat from "./pages/Chat";
 
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME;
-const SPLASH_MIN_MS = 1000;
+const SPLASH_MIN_MS = 1000; // splash stays at least this long so it never just flashes
+const PRELOAD_MAX_MS = 4000; // never wait longer than this for the preload
+
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+}
+
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = () => resolve();
+    img.src = src;
+  });
+}
 
 export default function App() {
-  const [status, setStatus] = useState("loading");
+  const [status, setStatus] = useState("loading"); // loading | gated | ready | error | outside-telegram
   const [profile, setProfile] = useState(null);
   const [referralCount, setReferralCount] = useState(0);
   const [settings, setSettings] = useState({});
@@ -25,6 +38,7 @@ export default function App() {
   const [tab, setTab] = useState("tasks");
   const [error, setError] = useState("");
   const [minTimePassed, setMinTimePassed] = useState(false);
+  const [chatHistory, setChatHistory] = useState(null); // preloaded Minibot messages
   
   useEffect(() => {
     const t = setTimeout(() => setMinTimePassed(true), SPLASH_MIN_MS);
@@ -48,6 +62,13 @@ export default function App() {
       await authenticate();
       setReauthHandler(authenticate);
       
+      // Start preloading the Minibot history and the header logo right away,
+      // in parallel with the other startup calls. Failures are ignored.
+      const chatPreload = callApi("chat_history", { limit: 50 })
+        .then((d) => setChatHistory(d.messages || []))
+        .catch(() => {});
+      const logoPreload = preloadImage("/logo.png");
+      
       const me = await callApi("me");
       setProfile(me.profile);
       setSettings(me.settings || {});
@@ -63,6 +84,9 @@ export default function App() {
           return;
         }
       }
+      
+      // Keep the splash up until the chat and logo are ready (or the safety timeout hits).
+      await withTimeout(Promise.all([chatPreload, logoPreload]), PRELOAD_MAX_MS);
       
       setStatus("ready");
     } catch (e) {
@@ -91,7 +115,7 @@ export default function App() {
   const showSplash = status === "loading" || !minTimePassed;
   
   function renderBody() {
-    if (status === "loading") return null;
+    if (status === "loading") return null; // the splash covers the screen
     if (status === "outside-telegram") return <Landing />;
     if (status === "error")
       return (
@@ -127,7 +151,7 @@ export default function App() {
 
         {tab === "tasks" && <Streak coinName={coinName} onBalanceChange={updateBalance} />}
         {tab === "earn" && <Earn settings={settings} onBalanceChange={updateBalance} />}
-        {tab === "minibot" && <Chat />}
+        {tab === "minibot" && <Chat initialMessages={chatHistory} onMessagesChange={setChatHistory} />}
         {tab === "frens" && (
           <Refer
             profile={profile}
