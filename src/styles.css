@@ -76,19 +76,7 @@ textarea {
   align-items: center;
   gap: 8px;
 }
-.topbar .wordmark .logo-slot {
-  /* IMAGE SLOT: app logo. Until the real logo arrives, a CSS star badge. */
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--primary), var(--ai));
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  color: #07060f;
-  font-weight: 700;
-  box-shadow: 0 0 14px rgba(124, 92, 255, 0.5);
-}
+
 .topbar .wordmark span {
   color: var(--primary-bright);
 }
@@ -100,7 +88,40 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.topbar .wordmark .logo-img {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+}
 
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+.splash.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+.splash-img {
+  width: min(78vw, 360px);
+  height: auto;
+  max-height: 80vh;
+  object-fit: contain;
+  animation: splash-breathe 2.4s ease-in-out infinite;
+}
+@keyframes splash-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
 /* ---------- balance card (starfield, pure CSS) ---------- */
 .ledger-card {
   margin: 12px 20px 20px;
